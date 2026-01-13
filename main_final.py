@@ -7,7 +7,9 @@ import time
 import tempfile
 from io import BytesIO
 
-# --- PATCH DE METADADOS PARA O DOCLING ---
+# --- PATCH DE METADADOS ULTRA-ROBUSTO PARA DOCLING ---
+# O Docling e o Transformers (Hugging Face) verificam versões de forma agressiva.
+# Este patch impede o erro 'PackageNotFoundError' e erros de importação de modelos.
 try:
     import importlib.metadata as metadata
 except ImportError:
@@ -18,13 +20,17 @@ def patched_version(package_name):
     try:
         return _original_version(package_name)
     except Exception:
+        # Versões "mentirosas" para garantir que o Docling inicialize sem checar o disco
         versions = {
             'docling': '2.15.0',
             'docling-core': '2.9.0',
             'docling-parse': '2.4.0',
             'docling-ibm-models': '1.1.0',
             'pypdfium2': '4.30.0',
-            'openpyxl': '3.1.5'
+            'openpyxl': '3.1.5',
+            'transformers': '4.40.0',
+            'torch': '2.2.0',
+            'torchvision': '0.17.0'
         }
         return versions.get(package_name, "1.0.0")
 metadata.version = patched_version
@@ -36,6 +42,8 @@ try:
     from docling.document_converter import DocumentConverter
     import google.generativeai as genai
     import onnxruntime
+    # Importação forçada para verificar presença no ambiente
+    import transformers
     DEPENDENCIAS_OK = True
 except ImportError as e:
     DEPENDENCIAS_OK = False
@@ -85,19 +93,21 @@ def call_gemini(api_key, prompt):
 
 def main():
     st.title("🏛️ Automação RAE CAIXA")
-    st.markdown("##### Processamento Inteligente via Gemini 2.5 Flash")
+    st.markdown("##### Inteligência Artificial para Engenharia")
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
+        st.warning("O servidor do Streamlit não carregou as bibliotecas de IA (Docling/Transformers).")
+        st.info("💡 Verifique se o seu 'requirements.txt' no GitHub inclui: torch, torchvision e transformers.")
         return
 
-    st.info("Sistema multiutilizador ativo. Cada laudo é processado de forma isolada e segura.")
+    st.info("Sistema multiutilizador ativo. Cada laudo é processado de forma isolada.")
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v2.7 - Estabilidade Cloud")
+        st.caption("v2.8 - Patch de Estabilidade Docling")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -107,28 +117,28 @@ def main():
 
     if st.button("🚀 INICIAR PROCESSAMENTO"):
         if not api_key or not pdf_file or not excel_file:
-            st.warning("Preencha a chave API e carregue os dois ficheiros.")
+            st.warning("Preencha a chave API e carregue os arquivos.")
             return
 
         try:
             with st.status("A analisar documento...", expanded=True) as status:
-                # Criação de ficheiro temporário seguro para o Docling
-                st.write("📖 A ler estrutura do PDF...")
+                # Ficheiro temporário seguro
+                st.write("📖 Lendo estrutura do PDF com Docling...")
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_file.getbuffer())
                     tmp_path = tmp.name
 
                 try:
-                    # Inicializa o motor e converte usando o caminho absoluto
+                    # Inicializa o motor
+                    # O erro AutoModelForObjectDetection costuma acontecer aqui
                     converter = DocumentConverter()
                     res = converter.convert(tmp_path)
                     md_content = re.sub(r'\n\s*\n', '\n', res.document.export_to_markdown())
                 finally:
-                    # Garante a limpeza do ficheiro temporário após a leitura
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
 
-                st.write("🧠 A extrair dados com Inteligência Artificial...")
+                st.write("🧠 IA: Extraindo dados técnicos...")
                 prompt = f"""
                 Atue como engenheiro revisor da CAIXA. Extraia os dados para JSON:
                 - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel
@@ -139,7 +149,7 @@ def main():
                 """
                 dados = call_gemini(api_key, prompt)
 
-                st.write("📊 A preencher planilha Excel...")
+                st.write("📊 Gravando na planilha Excel...")
                 wb = load_workbook(BytesIO(excel_file.read()), keep_vba=True)
                 wb.calculation.fullCalcOnLoad = True
 
@@ -194,6 +204,8 @@ def main():
 
         except Exception as e:
             st.error(f"Erro inesperado: {e}")
+            if "AutoModelForObjectDetection" in str(e):
+                st.info("⚠️ Este erro indica que as bibliotecas 'torch' e 'torchvision' precisam ser adicionadas ao requirements.txt do seu GitHub.")
 
 if __name__ == "__main__":
     main()
