@@ -4,10 +4,10 @@ import os
 import re
 import json
 import time
+import tempfile
 from io import BytesIO
 
 # --- PATCH DE METADADOS PARA O DOCLING ---
-# Evita que o app trave ao procurar versões de pacotes no ambiente Linux do Streamlit
 try:
     import importlib.metadata as metadata
 except ImportError:
@@ -29,7 +29,7 @@ def patched_version(package_name):
         return versions.get(package_name, "1.0.0")
 metadata.version = patched_version
 
-# --- IMPORTAÇÃO DAS DEPENDÊNCIAS COM TRATAMENTO DE ERRO ---
+# --- IMPORTAÇÃO DAS DEPENDÊNCIAS ---
 try:
     import pandas as pd
     from openpyxl import load_workbook
@@ -41,10 +41,9 @@ except ImportError as e:
     DEPENDENCIAS_OK = False
     ERRO_IMPORT = str(e)
 
-# Configuração da página
 st.set_page_config(page_title="Automação RAE CAIXA", page_icon="🏛️", layout="centered")
 
-# CSS para interface
+# Estilização Profissional
 st.markdown("""
     <style>
     .main { background-color: #ffffff; }
@@ -86,72 +85,61 @@ def call_gemini(api_key, prompt):
 
 def main():
     st.title("🏛️ Automação RAE CAIXA")
-    st.markdown("##### Inteligência Artificial para Laudos de Engenharia")
+    st.markdown("##### Processamento Inteligente via Gemini 2.5 Flash")
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
-        st.warning("O Streamlit Cloud não instalou as bibliotecas do arquivo 'requirements.txt'.")
-        
-        with st.expander("🛠️ Como resolver este erro agora", expanded=True):
-            st.markdown("""
-            1. Vá ao painel do **Streamlit Cloud** (share.streamlit.io).
-            2. Localize seu app e clique nos **três pontos (...)** no canto direito.
-            3. Selecione **'Reboot App'**. 
-            4. Se não funcionar, clique em **'Delete'** e suba o app novamente apontando para o repositório. Isso força a limpeza do cache de instalação.
-            
-            **Seu arquivo 'requirements.txt' no GitHub deve ser EXATAMENTE assim:**
-            ```text
-            streamlit
-            pandas
-            openpyxl
-            docling
-            google-generativeai
-            onnxruntime
-            ```
-            """)
         return
 
-    st.info("Carregue o laudo em PDF e a planilha modelo para iniciar.")
+    st.info("Sistema multiutilizador ativo. Cada laudo é processado de forma isolada e segura.")
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v2.5 - Streamlit Cloud Edition")
+        st.caption("v2.7 - Estabilidade Cloud")
 
     col1, col2 = st.columns(2)
     with col1:
-        pdf_file = st.file_uploader("1. Laudo PDF", type=["pdf"])
+        pdf_file = st.file_uploader("1. Enviar Laudo (PDF)", type=["pdf"])
     with col2:
-        excel_file = st.file_uploader("2. Planilha Modelo (.xlsm)", type=["xlsm"])
+        excel_file = st.file_uploader("2. Enviar Modelo (.xlsm)", type=["xlsm"])
 
-    if st.button("🚀 PROCESSAR DOCUMENTOS"):
+    if st.button("🚀 INICIAR PROCESSAMENTO"):
         if not api_key or not pdf_file or not excel_file:
-            st.warning("Preencha todos os campos e envie os arquivos.")
+            st.warning("Preencha a chave API e carregue os dois ficheiros.")
             return
 
         try:
-            with st.status("Trabalhando no laudo...", expanded=True) as status:
-                st.write("📖 Extraindo dados do PDF com Docling...")
-                with open("temp_file.pdf", "wb") as f:
-                    f.write(pdf_file.getbuffer())
-                
-                converter = DocumentConverter()
-                res = converter.convert("temp_file.pdf")
-                md_content = re.sub(r'\n\s*\n', '\n', res.document.export_to_markdown())
+            with st.status("A analisar documento...", expanded=True) as status:
+                # Criação de ficheiro temporário seguro para o Docling
+                st.write("📖 A ler estrutura do PDF...")
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(pdf_file.getbuffer())
+                    tmp_path = tmp.name
 
-                st.write("🧠 Analisando informações com Gemini 2.5...")
+                try:
+                    # Inicializa o motor e converte usando o caminho absoluto
+                    converter = DocumentConverter()
+                    res = converter.convert(tmp_path)
+                    md_content = re.sub(r'\n\s*\n', '\n', res.document.export_to_markdown())
+                finally:
+                    # Garante a limpeza do ficheiro temporário após a leitura
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+
+                st.write("🧠 A extrair dados com Inteligência Artificial...")
                 prompt = f"""
                 Atue como engenheiro revisor da CAIXA. Extraia os dados para JSON:
                 - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel
                 - OFICIO: Número após a matrícula em DOCUMENTOS (ex: 12345 / 3 / CE, ofício é 3).
-                - COORDENADAS: GMS puro (ex: 06°24'08.8"). SEM letras S, N, W ou E.
+                - COORDENADAS: GMS puro (ex: 06°24'08.8"). SEM letras no final.
                 - TABELAS: 'incidencias' (20 números PESO %), 'acumulado' (percentuais % ACUMULADO).
                 DOCUMENTO: {md_content}
                 """
                 dados = call_gemini(api_key, prompt)
 
-                st.write("📊 Preenchendo planilha Excel...")
+                st.write("📊 A preencher planilha Excel...")
                 wb = load_workbook(BytesIO(excel_file.read()), keep_vba=True)
                 wb.calculation.fullCalcOnLoad = True
 
@@ -160,6 +148,7 @@ def main():
                     try: return float(str(v).replace(',', '.').replace('%', '').strip())
                     except: return 0
 
+                # Aba Início Vistoria
                 if "Início Vistoria" in wb.sheetnames:
                     ws = wb["Início Vistoria"]
                     mapping = {
@@ -174,6 +163,7 @@ def main():
                         ws[cell] = to_f(val) if key == "valor_terreno" else str(val).upper()
                     ws["Q54"], ws["Q55"], ws["Q56"] = "Casa", "Residencial", "Vistoria para aferição de obra"
 
+                # Aba RAE
                 if "RAE" in wb.sheetnames:
                     ws_rae = wb["RAE"]
                     ws_rae.sheet_state = 'visible'
@@ -192,20 +182,18 @@ def main():
                 primeiro_nome = proponente.split(' ')[0].upper() if proponente else "FINAL"
                 nome_arq = f"RAE_{primeiro_nome}.xlsm"
 
-                status.update(label="✅ Concluído!", state="complete", expanded=False)
+                status.update(label="✅ Mapeamento concluído!", state="complete", expanded=False)
 
             st.balloons()
             st.download_button(
-                label="📥 BAIXAR RAE PREENCHIDA",
+                label=f"📥 BAIXAR RAE - {primeiro_nome}",
                 data=processed_data,
                 file_name=nome_arq,
                 mime="application/vnd.ms-excel.sheet.macroEnabled.12"
             )
 
         except Exception as e:
-            st.error(f"Erro no processamento: {e}")
-        finally:
-            if os.path.exists("temp_file.pdf"): os.remove("temp_file.pdf")
+            st.error(f"Erro inesperado: {e}")
 
 if __name__ == "__main__":
     main()
