@@ -89,8 +89,26 @@ def main():
     st.markdown("##### Inteligência Artificial para Laudos de Engenharia")
 
     if not DEPENDENCIAS_OK:
-        st.error(f"❌ Erro de Dependências: O servidor não instalou corretamente as bibliotecas. Erro: {ERRO_IMPORT}")
-        st.info("Certifique-se de que o arquivo 'requirements.txt' no GitHub contém: streamlit, pandas, openpyxl, docling, google-generativeai, onnxruntime")
+        st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
+        st.warning("O Streamlit Cloud não instalou as bibliotecas do arquivo 'requirements.txt'.")
+        
+        with st.expander("🛠️ Como resolver este erro agora", expanded=True):
+            st.markdown("""
+            1. Vá ao painel do **Streamlit Cloud** (share.streamlit.io).
+            2. Localize seu app e clique nos **três pontos (...)** no canto direito.
+            3. Selecione **'Reboot App'**. 
+            4. Se não funcionar, clique em **'Delete'** e suba o app novamente apontando para o repositório. Isso força a limpeza do cache de instalação.
+            
+            **Seu arquivo 'requirements.txt' no GitHub deve ser EXATAMENTE assim:**
+            ```text
+            streamlit
+            pandas
+            openpyxl
+            docling
+            google-generativeai
+            onnxruntime
+            ```
+            """)
         return
 
     st.info("Carregue o laudo em PDF e a planilha modelo para iniciar.")
