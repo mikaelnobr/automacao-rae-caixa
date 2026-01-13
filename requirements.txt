@@ -4,3 +4,4 @@ openpyxl
 docling
 google-generativeai
 onnxruntime
+rapidocr-onnxruntime
