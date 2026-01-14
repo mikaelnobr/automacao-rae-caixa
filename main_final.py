@@ -10,6 +10,42 @@ from io import BytesIO
 # --- CONFIGURAÇÃO INICIAL (OBRIGATORIAMENTE O PRIMEIRO COMANDO ST) ---
 st.set_page_config(page_title="Automação RAE CAIXA", page_icon="🏛️", layout="centered")
 
+# --- BANCO DE DADOS DE PROFISSIONAIS ---
+PROFISSIONAIS = {
+    "FRANCISCO DAVID MENESES DOS SANTOS": {
+        "empresa": "FRANCISCO DAVID MENESES DOS SANTOS - F. D. MENESES DOS SANTOS",
+        "cnpj": "54.801.096/0001-16",
+        "cpf_emp": "058.756.003-73",
+        "nome_resp": "FRANCISCO DAVID MENESES DOS SANTOS",
+        "cpf_resp": "058.756.003-73",
+        "registro": "336241CE"
+    },
+    "PALLOMA TEIXEIRA DA SILVA": {
+        "empresa": "PALLOMA TEIXEIRA DA SILVA - PALLOMA TEIXEIRA ARQUITETURA LTDA",
+        "cnpj": "54.862.474/0001-71",
+        "cpf_emp": "064.943.593-10",
+        "nome_resp": "PALLOMA TEIXEIRA DA SILVA",
+        "cpf_resp": "064.943.593-10",
+        "registro": "A184355-9"
+    },
+    "SANDY PEREIRA CORDEIRO": {
+        "empresa": "SANDY PEREIRA CORDEIRO - CS ENGENHARIA",
+        "cnpj": "54.794.898/0001-46",
+        "cpf_emp": "071.222.553-60",
+        "nome_resp": "SANDY PEREIRA CORDEIRO",
+        "cpf_resp": "071.222.553-60",
+        "registro": "356882CE"
+    },
+    "TIAGO VICTOR DE SOUSA": {
+        "empresa": "TIAGO VICTOR DE SOUSA - T V S ENGENHARIA E ASSESSORIA",
+        "cnpj": "54.806.521/0001-60",
+        "cpf_emp": "068.594.803-00",
+        "nome_resp": "TIAGO VICTOR DE SOUSA",
+        "cpf_resp": "068.594.803-00",
+        "registro": "346856CE"
+    }
+}
+
 # --- PATCH DE METADADOS ULTRA-ROBUSTO ---
 try:
     import importlib.metadata as metadata
@@ -70,7 +106,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Cache para o conversor (Evita estourar a RAM do servidor)
+# Cache para o conversor
 @st.cache_resource
 def get_converter():
     pipeline_options = PdfPipelineOptions()
@@ -106,14 +142,20 @@ def main():
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
-        st.info("💡 Para corrigir, adicione 'optree', 'timm', 'torch', 'torchvision' e 'transformers' ao requirements.txt.")
         return
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
+        
         st.divider()
-        st.caption("v3.6 - Adição Etapa Original & Cache")
+        st.subheader("👤 Responsável Técnico")
+        resp_selecionado = st.selectbox(
+            "Selecione o Profissional:",
+            options=list(PROFISSIONAIS.keys())
+        )
+        st.divider()
+        st.caption("v3.7 - Seleção de Profissionais")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -128,7 +170,6 @@ def main():
 
         try:
             with st.status("A processar laudo técnico...", expanded=True) as status:
-                # Ficheiro temporário
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_file.getbuffer())
                     tmp_path = tmp.name
@@ -147,9 +188,9 @@ def main():
                 - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel, lat_s, long_w, etapas_original
                 - OFICIO: Número após a matrícula em DOCUMENTOS (ex: 12345 / 3 / CE, ofício é 3).
                 - COORDENADAS (GMS puro): 
-                    - lat_s: Latitude no formato Graus, Minutos e Segundos (ex: 06°24'08.8"). NÃO inclua letras (S/N) no final.
-                    - long_w: Longitude no formato Graus, Minutos e Segundos (ex: 39°18'21.5"). NÃO inclua letras (W/E) no final.
-                - CRONOGRAMA: etapas_original (Identifique o número total de etapas ou meses previstos no cronograma original do laudo).
+                    - lat_s: Latitude (ex: 06°24'08.8"). NÃO inclua letras (S/N).
+                    - long_w: Longitude (ex: 39°18'21.5"). NÃO inclua letras (W/E).
+                - CRONOGRAMA: etapas_original (Número total de etapas/meses).
                 - TABELAS: 'incidencias' (20 números PESO %), 'acumulado' (percentuais % ACUMULADO).
                 DOCUMENTO: {md_content}
                 """
@@ -164,6 +205,7 @@ def main():
                     try: return float(str(v).replace(',', '.').replace('%', '').strip())
                     except: return 0
 
+                # Aba Início Vistoria
                 if "Início Vistoria" in wb.sheetnames:
                     ws = wb["Início Vistoria"]
                     mapping = {
@@ -178,11 +220,21 @@ def main():
                         ws[cell] = to_f(val) if key == "valor_terreno" else str(val).upper()
                     ws["Q54"], ws["Q55"], ws["Q56"] = "Casa", "Residencial", "Vistoria para aferição de obra"
 
+                # Aba RAE
                 if "RAE" in wb.sheetnames:
                     ws_rae = wb["RAE"]
                     ws_rae.sheet_state = 'visible'
                     ws_rae["AH66"] = to_f(dados.get("valor_imovel", 0))
-                    ws_rae["AS66"] = to_f(dados.get("etapas_original", 0)) # Campo solicitado: Etapas originais
+                    ws_rae["AS66"] = to_f(dados.get("etapas_original", 0))
+                    
+                    # Preenchimento do Profissional Selecionado
+                    prof = PROFISSIONAIS[resp_selecionado]
+                    ws_rae["I315"] = prof["empresa"].upper()
+                    ws_rae["I316"] = prof["cnpj"]
+                    ws_rae["U316"] = prof["cpf_emp"]
+                    ws_rae["AE315"] = prof["nome_resp"].upper()
+                    ws_rae["AE316"] = prof["cpf_resp"]
+                    ws_rae["AO316"] = prof["registro"].upper()
                     
                     incs, acus = dados.get("incidencias", []), dados.get("acumulado", [])
                     for i in range(20):
@@ -209,18 +261,7 @@ def main():
             )
 
         except Exception as e:
-            if "libGL.so.1" in str(e):
-                st.error("❌ Erro de Dependência do Sistema (libGL.so.1)")
-                st.markdown("""
-                **Como resolver:**
-                Crie o arquivo **`packages.txt`** no GitHub com:
-                ```text
-                libgl1
-                libglib2.0-0
-                ```
-                """)
-            else:
-                st.error(f"Erro no processamento: {e}")
+            st.error(f"Erro no processamento: {e}")
 
 if __name__ == "__main__":
     main()
