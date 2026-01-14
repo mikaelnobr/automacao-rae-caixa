@@ -113,7 +113,7 @@ def main():
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.5 - Coordenadas Fix & Cache")
+        st.caption("v3.6 - Adição Etapa Original & Cache")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -144,11 +144,12 @@ def main():
                 st.write("🧠 IA: Extraindo dados técnicos...")
                 prompt = f"""
                 Atue como engenheiro revisor da CAIXA. Extraia os dados para JSON:
-                - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel, lat_s, long_w
+                - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel, lat_s, long_w, etapas_original
                 - OFICIO: Número após a matrícula em DOCUMENTOS (ex: 12345 / 3 / CE, ofício é 3).
                 - COORDENADAS (GMS puro): 
                     - lat_s: Latitude no formato Graus, Minutos e Segundos (ex: 06°24'08.8"). NÃO inclua letras (S/N) no final.
                     - long_w: Longitude no formato Graus, Minutos e Segundos (ex: 39°18'21.5"). NÃO inclua letras (W/E) no final.
+                - CRONOGRAMA: etapas_original (Identifique o número total de etapas ou meses previstos no cronograma original do laudo).
                 - TABELAS: 'incidencias' (20 números PESO %), 'acumulado' (percentuais % ACUMULADO).
                 DOCUMENTO: {md_content}
                 """
@@ -181,6 +182,8 @@ def main():
                     ws_rae = wb["RAE"]
                     ws_rae.sheet_state = 'visible'
                     ws_rae["AH66"] = to_f(dados.get("valor_imovel", 0))
+                    ws_rae["AS66"] = to_f(dados.get("etapas_original", 0)) # Campo solicitado: Etapas originais
+                    
                     incs, acus = dados.get("incidencias", []), dados.get("acumulado", [])
                     for i in range(20):
                         ws_rae[f"S{69+i}"] = to_f(incs[i]) if i < len(incs) else 0
