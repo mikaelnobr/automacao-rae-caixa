@@ -40,15 +40,15 @@ metadata.version = patched_version
 try:
     import pandas as pd
     from openpyxl import load_workbook
-    from docling.document_converter import DocumentConverter
-    # Importamos as opções para tornar o processamento mais estável
+    # Adicionada a importação de PdfFormatOption para corrigir o erro de atributo
+    from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.datamodel.base_models import InputFormat
     import google.generativeai as genai
     import onnxruntime
     import transformers
     import timm
-    import optree # Dependência essencial para processamento de árvores de dados em IA
+    import optree 
     DEPENDENCIAS_OK = True
 except ImportError as e:
     DEPENDENCIAS_OK = False
@@ -108,7 +108,7 @@ transformers
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.1 - Patch Optree & Stability")
+        st.caption("v3.2 - Fix PdfPipelineOptions Error")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -135,9 +135,12 @@ transformers
                     pipeline_options.do_table_structure = True 
                     pipeline_options.table_structure_options.do_cell_matching = True
                     
+                    # CORREÇÃO: Encapsulando pipeline_options em PdfFormatOption
                     converter = DocumentConverter(
                         allowed_formats=[InputFormat.PDF],
-                        format_options={InputFormat.PDF: pipeline_options}
+                        format_options={
+                            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                        }
                     )
                     
                     res = converter.convert(tmp_path)
