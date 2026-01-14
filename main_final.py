@@ -113,7 +113,7 @@ def main():
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.4 - Fixed Page Config & Cache")
+        st.caption("v3.5 - Coordenadas Fix & Cache")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -144,9 +144,11 @@ def main():
                 st.write("🧠 IA: Extraindo dados técnicos...")
                 prompt = f"""
                 Atue como engenheiro revisor da CAIXA. Extraia os dados para JSON:
-                - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel
+                - CAMPOS: proponente, cpf_cnpj, ddd, telefone, endereco, bairro, cep, municipio, uf_vistoria, uf_registro, complemento, matricula, comarca, valor_terreno, valor_imovel, lat_s, long_w
                 - OFICIO: Número após a matrícula em DOCUMENTOS (ex: 12345 / 3 / CE, ofício é 3).
-                - COORDENADAS: GMS puro (ex: 06°24'08.8"). SEM letras no final.
+                - COORDENADAS (GMS puro): 
+                    - lat_s: Latitude no formato Graus, Minutos e Segundos (ex: 06°24'08.8"). NÃO inclua letras (S/N) no final.
+                    - long_w: Longitude no formato Graus, Minutos e Segundos (ex: 39°18'21.5"). NÃO inclua letras (W/E) no final.
                 - TABELAS: 'incidencias' (20 números PESO %), 'acumulado' (percentuais % ACUMULADO).
                 DOCUMENTO: {md_content}
                 """
