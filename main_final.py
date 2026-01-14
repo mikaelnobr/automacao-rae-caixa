@@ -19,7 +19,7 @@ def patched_version(package_name):
     try:
         return _original_version(package_name)
     except Exception:
-        # Versões forçadas para garantir a inicialização dos motores de IA
+        # Versões forçadas para garantir a inicialização dos motores de IA e dependências recursivas
         versions = {
             'docling': '2.15.0',
             'docling-core': '2.9.0',
@@ -30,7 +30,8 @@ def patched_version(package_name):
             'transformers': '4.40.0',
             'torch': '2.2.0',
             'torchvision': '0.17.0',
-            'timm': '0.9.16'
+            'timm': '0.9.16',
+            'optree': '0.11.0'
         }
         return versions.get(package_name, "1.0.0")
 metadata.version = patched_version
@@ -41,12 +42,13 @@ try:
     from openpyxl import load_workbook
     from docling.document_converter import DocumentConverter
     # Importamos as opções para tornar o processamento mais estável
-    from docling.datamodel.pipeline_options import PdfPipelineOptions, TableStructureOptions
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.datamodel.base_models import InputFormat
     import google.generativeai as genai
     import onnxruntime
     import transformers
     import timm
+    import optree # Dependência essencial para processamento de árvores de dados em IA
     DEPENDENCIAS_OK = True
 except ImportError as e:
     DEPENDENCIAS_OK = False
@@ -92,14 +94,21 @@ def main():
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
-        st.info("💡 Verifique se adicionou 'timm', 'torch' e 'torchvision' ao requirements.txt.")
+        st.info("💡 Para corrigir, adicione as seguintes linhas ao seu arquivo **requirements.txt** no GitHub e faça o Reboot do App:")
+        st.code("""
+optree
+timm
+torch
+torchvision
+transformers
+        """)
         return
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.0 - Estabilidade Vision")
+        st.caption("v3.1 - Patch Optree & Stability")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -122,9 +131,8 @@ def main():
                 try:
                     st.write("📖 Lendo estrutura do PDF com Docling...")
                     
-                    # CONFIGURAÇÃO DE SEGURANÇA: Otimizamos o pipeline para evitar erros de memória no Streamlit
                     pipeline_options = PdfPipelineOptions()
-                    pipeline_options.do_table_structure = True # Mantemos tabelas ativas
+                    pipeline_options.do_table_structure = True 
                     pipeline_options.table_structure_options.do_cell_matching = True
                     
                     converter = DocumentConverter(
