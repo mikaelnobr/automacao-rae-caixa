@@ -7,9 +7,8 @@ import time
 import tempfile
 from io import BytesIO
 
-# --- PATCH DE METADADOS ULTRA-ROBUSTO PARA DOCLING ---
-# O Docling e o Transformers (Hugging Face) verificam versões de forma agressiva.
-# Este patch impede o erro 'PackageNotFoundError' e erros de importação de modelos.
+# --- PATCH DE METADADOS ULTRA-ROBUSTO ---
+# Este bloco impede que o Docling e o Transformers travem no ambiente Linux do Streamlit
 try:
     import importlib.metadata as metadata
 except ImportError:
@@ -20,7 +19,7 @@ def patched_version(package_name):
     try:
         return _original_version(package_name)
     except Exception:
-        # Versões "mentirosas" para garantir que o Docling inicialize sem checar o disco
+        # Versões forçadas para garantir a inicialização dos motores de IA
         versions = {
             'docling': '2.15.0',
             'docling-core': '2.9.0',
@@ -30,7 +29,8 @@ def patched_version(package_name):
             'openpyxl': '3.1.5',
             'transformers': '4.40.0',
             'torch': '2.2.0',
-            'torchvision': '0.17.0'
+            'torchvision': '0.17.0',
+            'timm': '0.9.16'
         }
         return versions.get(package_name, "1.0.0")
 metadata.version = patched_version
@@ -40,10 +40,13 @@ try:
     import pandas as pd
     from openpyxl import load_workbook
     from docling.document_converter import DocumentConverter
+    # Importamos as opções para tornar o processamento mais estável
+    from docling.datamodel.pipeline_options import PdfPipelineOptions, TableStructureOptions
+    from docling.datamodel.base_models import InputFormat
     import google.generativeai as genai
     import onnxruntime
-    # Importação forçada para verificar presença no ambiente
     import transformers
+    import timm
     DEPENDENCIAS_OK = True
 except ImportError as e:
     DEPENDENCIAS_OK = False
@@ -51,25 +54,17 @@ except ImportError as e:
 
 st.set_page_config(page_title="Automação RAE CAIXA", page_icon="🏛️", layout="centered")
 
-# Estilização Profissional
+# Estilização
 st.markdown("""
     <style>
     .main { background-color: #ffffff; }
     .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3.5em;
-        background-color: #4f46e5;
-        color: white;
-        font-weight: bold;
-        border: none;
+        width: 100%; border-radius: 8px; height: 3.5em;
+        background-color: #4f46e5; color: white; font-weight: bold; border: none;
     }
     .stDownloadButton>button {
-        width: 100%;
-        border-radius: 8px;
-        background-color: #059669;
-        color: white;
-        border: none;
+        width: 100%; border-radius: 8px;
+        background-color: #059669; color: white; border: none;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -97,17 +92,14 @@ def main():
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
-        st.warning("O servidor do Streamlit não carregou as bibliotecas de IA (Docling/Transformers).")
-        st.info("💡 Verifique se o seu 'requirements.txt' no GitHub inclui: torch, torchvision e transformers.")
+        st.info("💡 Verifique se adicionou 'timm', 'torch' e 'torchvision' ao requirements.txt.")
         return
-
-    st.info("Sistema multiutilizador ativo. Cada laudo é processado de forma isolada.")
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v2.8 - Patch de Estabilidade Docling")
+        st.caption("v3.0 - Estabilidade Vision")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -117,26 +109,33 @@ def main():
 
     if st.button("🚀 INICIAR PROCESSAMENTO"):
         if not api_key or not pdf_file or not excel_file:
-            st.warning("Preencha a chave API e carregue os arquivos.")
+            st.warning("Preencha a chave e carregue os ficheiros.")
             return
 
         try:
-            with st.status("A analisar documento...", expanded=True) as status:
-                # Ficheiro temporário seguro
-                st.write("📖 Lendo estrutura do PDF com Docling...")
+            with st.status("A processar laudo técnico...", expanded=True) as status:
+                # Ficheiro temporário
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_file.getbuffer())
                     tmp_path = tmp.name
 
                 try:
-                    # Inicializa o motor
-                    # O erro AutoModelForObjectDetection costuma acontecer aqui
-                    converter = DocumentConverter()
+                    st.write("📖 Lendo estrutura do PDF com Docling...")
+                    
+                    # CONFIGURAÇÃO DE SEGURANÇA: Otimizamos o pipeline para evitar erros de memória no Streamlit
+                    pipeline_options = PdfPipelineOptions()
+                    pipeline_options.do_table_structure = True # Mantemos tabelas ativas
+                    pipeline_options.table_structure_options.do_cell_matching = True
+                    
+                    converter = DocumentConverter(
+                        allowed_formats=[InputFormat.PDF],
+                        format_options={InputFormat.PDF: pipeline_options}
+                    )
+                    
                     res = converter.convert(tmp_path)
                     md_content = re.sub(r'\n\s*\n', '\n', res.document.export_to_markdown())
                 finally:
-                    if os.path.exists(tmp_path):
-                        os.remove(tmp_path)
+                    if os.path.exists(tmp_path): os.remove(tmp_path)
 
                 st.write("🧠 IA: Extraindo dados técnicos...")
                 prompt = f"""
@@ -158,7 +157,6 @@ def main():
                     try: return float(str(v).replace(',', '.').replace('%', '').strip())
                     except: return 0
 
-                # Aba Início Vistoria
                 if "Início Vistoria" in wb.sheetnames:
                     ws = wb["Início Vistoria"]
                     mapping = {
@@ -173,7 +171,6 @@ def main():
                         ws[cell] = to_f(val) if key == "valor_terreno" else str(val).upper()
                     ws["Q54"], ws["Q55"], ws["Q56"] = "Casa", "Residencial", "Vistoria para aferição de obra"
 
-                # Aba RAE
                 if "RAE" in wb.sheetnames:
                     ws_rae = wb["RAE"]
                     ws_rae.sheet_state = 'visible'
@@ -203,9 +200,7 @@ def main():
             )
 
         except Exception as e:
-            st.error(f"Erro inesperado: {e}")
-            if "AutoModelForObjectDetection" in str(e):
-                st.info("⚠️ Este erro indica que as bibliotecas 'torch' e 'torchvision' precisam ser adicionadas ao requirements.txt do seu GitHub.")
+            st.error(f"Erro no processamento: {e}")
 
 if __name__ == "__main__":
     main()
