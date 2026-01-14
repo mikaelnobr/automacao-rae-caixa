@@ -40,7 +40,6 @@ metadata.version = patched_version
 try:
     import pandas as pd
     from openpyxl import load_workbook
-    # Adicionada a importação de PdfFormatOption para corrigir o erro de atributo
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.datamodel.base_models import InputFormat
@@ -50,6 +49,7 @@ try:
     import timm
     import optree 
     DEPENDENCIAS_OK = True
+    ERRO_IMPORT = ""
 except ImportError as e:
     DEPENDENCIAS_OK = False
     ERRO_IMPORT = str(e)
@@ -108,7 +108,7 @@ transformers
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.2 - Fix PdfPipelineOptions Error")
+        st.caption("v3.3 - Fix System Dependencies")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -135,7 +135,7 @@ transformers
                     pipeline_options.do_table_structure = True 
                     pipeline_options.table_structure_options.do_cell_matching = True
                     
-                    # CORREÇÃO: Encapsulando pipeline_options em PdfFormatOption
+                    # Inicialização do conversor
                     converter = DocumentConverter(
                         allowed_formats=[InputFormat.PDF],
                         format_options={
@@ -211,7 +211,22 @@ transformers
             )
 
         except Exception as e:
-            st.error(f"Erro no processamento: {e}")
+            if "libGL.so.1" in str(e):
+                st.error("❌ Erro de Dependência do Sistema (libGL.so.1)")
+                st.markdown("""
+                Este erro ocorre porque o ambiente Linux do Streamlit Cloud não possui as bibliotecas gráficas necessárias para o Docling.
+                
+                **Como resolver:**
+                1. No seu repositório do GitHub, crie um arquivo chamado **`packages.txt`**.
+                2. Adicione as seguintes linhas dentro dele:
+                ```text
+                libgl1
+                libglib2.0-0
+                ```
+                3. Salve o arquivo e aguarde o Streamlit reiniciar o app.
+                """)
+            else:
+                st.error(f"Erro no processamento: {e}")
 
 if __name__ == "__main__":
     main()
