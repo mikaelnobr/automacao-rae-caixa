@@ -7,8 +7,10 @@ import time
 import tempfile
 from io import BytesIO
 
+# --- CONFIGURAÇÃO INICIAL (OBRIGATORIAMENTE O PRIMEIRO COMANDO ST) ---
+st.set_page_config(page_title="Automação RAE CAIXA", page_icon="🏛️", layout="centered")
+
 # --- PATCH DE METADADOS ULTRA-ROBUSTO ---
-# Este bloco impede que o Docling e o Transformers travem no ambiente Linux do Streamlit
 try:
     import importlib.metadata as metadata
 except ImportError:
@@ -19,7 +21,6 @@ def patched_version(package_name):
     try:
         return _original_version(package_name)
     except Exception:
-        # Versões forçadas para garantir a inicialização dos motores de IA e dependências recursivas
         versions = {
             'docling': '2.15.0',
             'docling-core': '2.9.0',
@@ -54,9 +55,7 @@ except ImportError as e:
     DEPENDENCIAS_OK = False
     ERRO_IMPORT = str(e)
 
-st.set_page_config(page_title="Automação RAE CAIXA", page_icon="🏛️", layout="centered")
-
-# Estilização
+# --- ESTILIZAÇÃO ---
 st.markdown("""
     <style>
     .main { background-color: #ffffff; }
@@ -70,6 +69,19 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+
+# Cache para o conversor (Evita estourar a RAM do servidor)
+@st.cache_resource
+def get_converter():
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_table_structure = True 
+    pipeline_options.table_structure_options.do_cell_matching = True
+    return DocumentConverter(
+        allowed_formats=[InputFormat.PDF],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
 
 def call_gemini(api_key, prompt):
     genai.configure(api_key=api_key)
@@ -94,21 +106,14 @@ def main():
 
     if not DEPENDENCIAS_OK:
         st.error(f"❌ Erro de Dependências: {ERRO_IMPORT}")
-        st.info("💡 Para corrigir, adicione as seguintes linhas ao seu arquivo **requirements.txt** no GitHub e faça o Reboot do App:")
-        st.code("""
-optree
-timm
-torch
-torchvision
-transformers
-        """)
+        st.info("💡 Para corrigir, adicione 'optree', 'timm', 'torch', 'torchvision' e 'transformers' ao requirements.txt.")
         return
 
     with st.sidebar:
         st.header("⚙️ Configurações")
         api_key = st.text_input("Gemini API Key:", type="password")
         st.divider()
-        st.caption("v3.3 - Fix System Dependencies")
+        st.caption("v3.4 - Fixed Page Config & Cache")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -130,19 +135,7 @@ transformers
 
                 try:
                     st.write("📖 Lendo estrutura do PDF com Docling...")
-                    
-                    pipeline_options = PdfPipelineOptions()
-                    pipeline_options.do_table_structure = True 
-                    pipeline_options.table_structure_options.do_cell_matching = True
-                    
-                    # Inicialização do conversor
-                    converter = DocumentConverter(
-                        allowed_formats=[InputFormat.PDF],
-                        format_options={
-                            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                        }
-                    )
-                    
+                    converter = get_converter()
                     res = converter.convert(tmp_path)
                     md_content = re.sub(r'\n\s*\n', '\n', res.document.export_to_markdown())
                 finally:
@@ -214,16 +207,12 @@ transformers
             if "libGL.so.1" in str(e):
                 st.error("❌ Erro de Dependência do Sistema (libGL.so.1)")
                 st.markdown("""
-                Este erro ocorre porque o ambiente Linux do Streamlit Cloud não possui as bibliotecas gráficas necessárias para o Docling.
-                
                 **Como resolver:**
-                1. No seu repositório do GitHub, crie um arquivo chamado **`packages.txt`**.
-                2. Adicione as seguintes linhas dentro dele:
+                Crie o arquivo **`packages.txt`** no GitHub com:
                 ```text
                 libgl1
                 libglib2.0-0
                 ```
-                3. Salve o arquivo e aguarde o Streamlit reiniciar o app.
                 """)
             else:
                 st.error(f"Erro no processamento: {e}")
